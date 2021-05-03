@@ -33,6 +33,13 @@
 #define FF95  &ArchivoNarrow_Regular50pt7b
 TFT_eSPI tft = TFT_eSPI(135, 240); // Invoke library, pins defined in User_Setup.h
 
+//Set colours to the icons
+#define GREEN 0x07E0
+#define BLACK 0x0000
+#define RED 0xF800
+#define WHITE 0xFFFF
+#define YELLOW 0xFFE0
+
 // Customized Anaire splash screen
 #include "anaire_ttgo_splash.h"
 
@@ -60,6 +67,10 @@ bool sound = true;
 // control loop timing
 static int64_t lastMmntTime = 0;
 static int startCheckingAfterUs = 5000000; // 5s
+
+// Define ADC PIN for battery voltage measurement
+#define ADC_PIN     34
+int vref = 1100;
 
 //! Long time delay, it is recommended to use shallow sleep, which can effectively reduce the current consumption
 void espDelay(int ms)
@@ -166,7 +177,69 @@ void displayInit() {
 
 void displaySplashScreen() {
    tft.pushImage(0, 0,  240, 135, anaire_ttgo_splash);
+ }
+
+//Draw a battery showing the level of charge
+void displayBatteryLevel(float voltage, int colour) {
+
+   // If battery voltage is up 4.5 then external power supply is working and battery is charging
+  if (voltage > 4.5) {
+     tft.drawRect(5, 110, 30, 18, colour);
+     tft.fillRect(35, 113, 5, 9, colour);
+     tft.fillRect(7, 112, 5, 14, colour);
+     delay(2500);
+     tft.fillRect(14, 112, 5, 14, colour);
+     delay(2500);
+     tft.fillRect(21, 112, 5, 14, colour);
+     delay(2500);
+     tft.fillRect(28, 112, 5, 14, colour);
+  } else if (voltage >= 4.2) {
+     tft.drawRect(5, 110, 30, 18, colour);
+     tft.fillRect(35, 113, 5, 9, colour);
+     tft.fillRect(7, 112, 5, 14, colour);
+     tft.fillRect(14, 112, 5, 14, colour);
+     tft.fillRect(21, 112, 5, 14, colour);
+     tft.fillRect(28, 112, 5, 14, colour);
+     } else if (voltage < 4.2 && voltage > 3.9) {
+       tft.drawRect(5, 110, 30, 18, colour);
+       tft.fillRect(35, 113, 5, 9, colour);
+       tft.fillRect(7, 112, 5, 14, colour);
+       tft.fillRect(14, 112, 5, 14, colour);
+       tft.fillRect(21, 112, 5, 14, colour);
+         } else if (voltage <= 3.9 && voltage > 3.8) {
+           tft.drawRect(5, 110, 30, 18, colour);
+           tft.fillRect(35, 113, 5, 9, colour);
+           tft.fillRect(7, 112, 5, 14, colour);
+           tft.fillRect(14, 112, 5, 14, colour);
+         } else if (voltage <= 3.8) {
+           tft.drawRect(5, 110, 30, 18, colour);
+           tft.fillRect(35, 113, 5, 9, colour);
+           tft.fillRect(7, 112, 5, 14, colour);
+  }
+
 }
+
+//Draw  WiFi icon
+void displayWifi(int colour_1, int colour_2) {
+  tft.drawCircle(20, 30, 14, colour_1);
+  tft.drawCircle(20, 30, 10, colour_1);
+  tft.fillCircle(20, 30, 6, colour_1);
+  tft.fillRect(6, 30, 30, 30, colour_2);
+  tft.fillRect(18, 30, 4, 8, colour_1);
+  //tft.drawLine(6, 16, 34, 46, colour_1);
+  //tft.drawLine(34, 16, 6, 46, colour_1); 
+  
+}
+
+//Draw buzz
+void displayBuzz(int colour) {
+  tft.fillRect(14, 65, 4, 10, colour);
+  tft.fillTriangle(25, 60, 16, 70, 25, 80, colour);
+  //tft.drawLine(10,90, 30, 55, colour);
+  //tft.drawLine(30, 90, 10, 55, colour);
+}
+
+
 
 void displayCo2(uint16_t co2, float temp, float hum) {
 
@@ -265,6 +338,10 @@ void setup() {
 void loop() {
   
   if (esp_timer_get_time() - lastMmntTime >= startCheckingAfterUs) {
+      
+    //Measure the voltage of the battery
+    uint16_t v = analogRead(ADC_PIN);
+    float battery_voltage = ((float)v / 4095.0) * 2.0 * 3.3 * (vref / 1000.0);
 
     if (scd30.dataReady()) {
       
@@ -293,6 +370,20 @@ void loop() {
       // display CO2, temperature and humidity values on the display
       displayCo2((uint16_t) round(scd30.CO2), scd30.temperature, scd30.relative_humidity);
       
+      //Display icons, colours are defined according the CO2 level
+      if (scd30.CO2 >= 1000 ) {
+        displayWifi(WHITE, RED);
+        displayBuzz(WHITE);
+        displayBatteryLevel(battery_voltage, WHITE);
+         } else if (scd30.CO2 >= 700 ) {
+            displayWifi(RED, YELLOW);
+            displayBuzz(RED);
+            displayBatteryLevel(battery_voltage, RED);
+              } else {
+                  displayWifi(GREEN, BLACK);
+                  displayBuzz(GREEN);
+                  displayBatteryLevel(battery_voltage, GREEN);
+                  }
     }
     
     else {
